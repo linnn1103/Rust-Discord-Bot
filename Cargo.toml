@@ -1,0 +1,13 @@
+[package]
+name = "discord-bot-rust"
+version = "0.1.0"
+edition = "2021"
+authors = ["1innn"]
+license = "MIT"
+
+[dependencies]
+serenity = "0.12"
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+rand = "0.8.5"
+poise = { version = "0.6.1" }
+num-format = "0.4.4"
