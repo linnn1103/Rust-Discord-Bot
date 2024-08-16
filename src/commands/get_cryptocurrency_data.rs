@@ -12,6 +12,7 @@ pub fn run(_options: &[ResolvedOption], symbol: String, price: String) -> Create
             CreateEmbedAuthor::new("Binance API")
                 .icon_url("https://avatars.githubusercontent.com/u/32770468?s=200&v=4"),
         )
+        .thumbnail("https://github.com/linnn1103/Rust-Discord-Bot/blob/v-0.1.2/material/crypto.gif")
         .description(format!("現價:\n\t{}", price))
 }
 
