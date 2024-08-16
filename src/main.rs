@@ -68,6 +68,26 @@ impl EventHandler for Handler {
                 "习近平万岁" => Some(commands::china::run(&command.data.options())),
                 "dirty_talk" => Some(commands::dirty::run(&command.data.options())),
                 "help" => Some(commands::help::run(&command.data.options())),
+                "加密貨幣現貨" => {
+                    if let Some(ResolvedOption {
+                        value: ResolvedValue::String(symbol),
+                        ..
+                    }) = &command.data.options().first()
+                    {
+                        let price = get_cryptocurrency_price(symbol).await;
+                        Some(commands::get_cryptocurrency_data::run(
+                            &command.data.options(), symbol.to_string(), price),
+                        )
+                    } else {
+                        Some(
+                            CreateEmbed::default()
+                                .color(colour::Colour::RED)
+                                .description(
+                                    "<a:emm:1272626653532786801> 起嗯找不到你要的這個幣種",
+                                ),
+                        )
+                    }
+                },
                 "重新命名" => {
                     let user_id = {
                         let data_read = ctx.data.read().await;
@@ -221,12 +241,34 @@ impl EventHandler for Handler {
         let _renamed_voice_channel =
             Command::create_global_command(&ctx.http, commands::renamed_voice_channel::register())
                 .await;
+        let _get_cryptocurrency_data = Command::create_global_command(
+            &ctx.http,
+            commands::get_cryptocurrency_data::register()
+        ).await;
         ctx.set_presence(
             Some(ActivityData::watching(BOT_STATE)),
             OnlineStatus::Online,
         );
         println!("{} is connected!", ready.user.name);
     }
+}
+
+/// 透過 Binance API 獲取加密貨幣的價格
+/// 因reqwest獲取資訊時要求block_on，
+/// 在一個已經運行的異步環境中嘗試使用 Runtime::block_on，這會導致衝突。
+/// 因此將獲取價格的邏輯放在這
+async fn get_cryptocurrency_price(symbol: &str) -> String {
+    let url = format!("https://api3.binance.com/api/v3/ticker/price?symbol={}", symbol.to_uppercase());
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .unwrap();
+    let body = response.text().await.unwrap();
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let price = json["price"].as_str().unwrap();
+    price.to_string()
 }
 
 #[tokio::main]
