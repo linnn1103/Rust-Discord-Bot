@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc, env};
 mod commands;
 
 mod utils;
-use crate::utils::global_data::{CommandCounter, VoiceChannelId};
+use utils::global_data::{CommandCounter, VoiceChannelId, Cryptoprice};
 
 /// 動態頻道的目標頻道ID
 const TARGET_CHANNEL_ID: u64 = 1181486481823498290;
@@ -51,12 +51,10 @@ impl EventHandler for Handler {
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::Command(command) = interaction {
+            
             let counter_lock = {
                 let data_read = ctx.data.read().await;
-                data_read
-                    .get::<CommandCounter>()
-                    .expect("Expected CommandCounter in TypeMap.")
-                    .clone()
+                data_read.get::<CommandCounter>().expect("Expected CommandCounter in TypeMap.").clone()
             };
             {
                 let mut counter = counter_lock.write().await;
@@ -68,6 +66,26 @@ impl EventHandler for Handler {
                 "习近平万岁" => Some(commands::china::run(&command.data.options())),
                 "dirty_talk" => Some(commands::dirty::run(&command.data.options())),
                 "help" => Some(commands::help::run(&command.data.options())),
+                "加密貨幣現貨" => {
+                    if let Some(ResolvedOption {
+                        value: ResolvedValue::String(symbol),
+                        ..
+                    }) = &command.data.options().first()
+                    {
+                        let price = get_cryptocurrency_price(symbol, ctx.clone()).await;
+                        Some(commands::get_cryptocurrency_data::run(
+                            &command.data.options(), symbol.to_string(), price),
+                        )
+                    } else {
+                        Some(
+                            CreateEmbed::default()
+                                .color(colour::Colour::RED)
+                                .description(
+                                    "<a:emm:1272626653532786801> 起嗯找不到你要的這個幣種",
+                                ),
+                        )
+                    }
+                },
                 "重新命名" => {
                     let user_id = {
                         let data_read = ctx.data.read().await;
@@ -211,22 +229,61 @@ impl EventHandler for Handler {
     }
 
     async fn ready(&self, ctx: Context, ready: Ready) {
-        let _signature =
-            Command::create_global_command(&ctx.http, commands::signature::register()).await;
-        let _china = Command::create_global_command(&ctx.http, commands::china::register()).await;
-        let _dirty = Command::create_global_command(&ctx.http, commands::dirty::register()).await;
-        let _help = Command::create_global_command(&ctx.http, commands::help::register()).await;
-        let _command_counter =
-            Command::create_global_command(&ctx.http, commands::command_counter::register()).await;
-        let _renamed_voice_channel =
-            Command::create_global_command(&ctx.http, commands::renamed_voice_channel::register())
-                .await;
+        let commands = vec![
+            commands::signature::register(),
+            commands::china::register(),
+            commands::dirty::register(),
+            commands::help::register(),
+            commands::command_counter::register(),
+            commands::renamed_voice_channel::register(),
+            commands::get_cryptocurrency_data::register(),
+        ];
+
+        for command in commands {
+            let _ = Command::create_global_command(&ctx.http, command).await;
+        }
         ctx.set_presence(
             Some(ActivityData::watching(BOT_STATE)),
             OnlineStatus::Online,
         );
         println!("{} is connected!", ready.user.name);
     }
+}
+
+/// 透過 Binance API 獲取加密貨幣的價格
+/// 因reqwest獲取資訊時要求block_on，
+/// 在一個已經運行的異步環境中嘗試使用 Runtime::block_on，這會導致衝突。
+/// 因此將獲取價格的邏輯放在這
+async fn get_cryptocurrency_price(symbol: &str, ctx: Context) -> (String,String) {
+    let url = format!("https://api3.binance.com/api/v3/ticker/price?symbol={}USDT", symbol.to_uppercase());
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .unwrap();
+    let body = response.text().await.unwrap();
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let price = json["price"].as_str().unwrap();
+    let old_price = {
+        let data_read = ctx.data.read().await;
+        let price_reader_lock =
+            data_read.get::<Cryptoprice>().expect("Expected CommandCounter in TypeMap.").clone();
+    
+        let price_reader = price_reader_lock.read().await;
+    
+        price_reader.get(&symbol.to_uppercase().to_string()).cloned().unwrap_or_else(|| "None".to_string())
+    };
+    let price_lock = {
+        let data_read = ctx.data.read().await;
+        data_read.get::<Cryptoprice>().expect("Expected CommandCounter in TypeMap.").clone()
+    };
+    {
+        let mut counter = price_lock.write().await;
+        let entry = counter.entry(symbol.to_uppercase().to_string()).or_insert("0".to_string());
+        *entry = price.to_string();
+    }
+    (price.to_string(), old_price)
 }
 
 #[tokio::main]
@@ -248,6 +305,8 @@ async fn main() {
         data.insert::<CommandCounter>(Arc::new(RwLock::new(HashMap::default())));
 
         data.insert::<VoiceChannelId>(Arc::new(RwLock::new(HashMap::default())));
+        
+        data.insert::<Cryptoprice>(Arc::new(RwLock::new(HashMap::default())));
     }
     if let Err(why) = client.start().await {
         println!("Client error: {:?}", why);

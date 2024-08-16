@@ -16,8 +16,9 @@ pub fn run(_options: &[ResolvedOption]) -> CreateEmbed {
         .fields(vec![
             ("向起嗯大神求籤", " `/求籤`", true),
             ("跟起嗯dirty talk", " `/dirty_talk`", true),
-            ("看看起嗯被用了幾次", " `/指令計數器`", true),
-            ("為你的語音頻道重新命名", " `/重新命名`", true),
+            ("看看起嗯被用了幾次", " `/指令計數器 <command name>`", true),
+            ("查詢加密貨幣價格", " `/加密貨幣現貨 <code>`", true),
+            ("為你的語音頻道重新命名", " `/重新命名 <name>`", true),
             ("向伟大的起嗯总书记宣誓效忠", " `/习近平万岁`", true),
         ])
 }
