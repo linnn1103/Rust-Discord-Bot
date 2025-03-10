@@ -12,7 +12,7 @@
   
 機器人允許在伺服器中創建動態語音頻道，在`main.rs`中修改`TARGET_CHANNEL_ID`以設定用來創建動態語音頻道的房間、修改`CATEGORY_ID`設定動態語音頻道所屬的類別。  
   
-完整邏輯於`main.rs``fn voice_state_update`  
+完整邏輯於`main.rs` `fn voice_state_update`  
   
 ### 指令  
 
